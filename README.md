@@ -1,0 +1,8 @@
+Based on the BeatBoxFinal.java class from Appendix A of the book 'Head First Java' with added serialization buttons and self-implemented chat client/server:
+
+<a href="http://www.oreilly.com/catalog/hfjava2">
+ * Head First Java, 2nd Edition</a>.
+
+Music creation application that that uses a Swing GUI instance to collect the state of 16 rows of JCheckBox objects, each representing an instrument to be played. These rows have their respective 16 JCheckBox objects as well, each representing a beat in time upon which that instrument will emit a sound. JCheckBox state is kept in an array, which is processed and turned into MidiEvent objects upon pressing 'Start', according to the instrument selected. The MidiEvents are thus added to a track, added to a sequence, ultimately played by a sequencer. The program will then loop and continue playing all instruments on their respective beat until user presses 'Stop'. The tempo of the current beat can be sped up and down with the 'Tempo Up' and 'Tempo Down' features.
+
+Beat patterns can be serialized as an object to a local file and deserialized using the 'Save' and 'Load' features, allowing users to send beats amongst each other. A multithreaded chat server is also implemented to allow for collaborative music creation and discussion. The server opens a socket connection and listens on a port for any connecting clients, generating an object from a handler class with each acting on its own thread. Each thread when executed will open two character streams to store the the username of the connecting client and their subsequent message in a hash set, broadcasting both to all clients.
