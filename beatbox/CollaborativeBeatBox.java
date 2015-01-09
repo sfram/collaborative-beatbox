@@ -9,6 +9,17 @@ import java.util.*;
 import java.io.*;
 import java.net.Socket;
 
+/** Music creation creation application. Uses a Swing
+  * GUI instance to collect the state of 16 rows of 16
+  * JCheckBox objects, each representing an instrument to be
+  * played on a specific beat through the use of sequenced
+  * MIDI events. JCheckBox state is kept in an array, which 
+  * is processed and turned into MidiEvent objects upon
+  * pressing 'Start', according to the instrument selected.
+  * The MidiEvents are thus added to a track which is then
+  * added to a sequence, ultimately played by a sequencer.
+  */
+
 public class CollaborativeBeatBox {
   
   JPanel mainPanel;
@@ -20,21 +31,39 @@ public class CollaborativeBeatBox {
   
   BufferedReader in;
   PrintWriter out;
+  
   JTextField textField = new JTextField(40);
   JTextArea messageField = new JTextArea(8, 40);
+  
+  /** 
+   * Array of instrument row labels
+   * */
   
   String[] instrumentNames = {"Bass Drum", "Closed Hi-Hat",
     "Open Hi-Hat", "Acoustic Snare", "Crash Cymbal",
     "Hand Clap", "High Tom", "Hi Bongo", "Maracas", 
     "Whistle", "Low Conga", "Cowbell", "Vibraslap",
     "Low-mid Tom", "High Agogo", "Open Hi Conga"};
-    int[] instruments = {35, 42, 46, 38, 49, 39, 50, 60,
+  
+  /**
+   * Array of instrument keys
+   *  */
+  
+  int[] instruments = {35, 42, 46, 38, 49, 39, 50, 60,
     70, 72, 64, 56, 58, 47, 67, 63};
   
+    /**
+     * Creates the Beat Box.
+     */
+       
   public static void main (String[] args) {
     new CollaborativeBeatBox().buildGUI();
   }
   
+     /**
+      * Swing construction code
+      */
+        
   public void buildGUI() {
     theFrame = new JFrame("Collaborative Beatbox");
     theFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -46,35 +75,40 @@ public class CollaborativeBeatBox {
     Box buttonBox = new Box(BoxLayout.Y_AXIS);
     
     JButton start = new JButton("Start");
-    start.addActionListener(new MyStartListener());
+    start.addActionListener(new myStartListener());
     buttonBox.add(start);
     
     JButton stop = new JButton("Stop");
-    stop.addActionListener(new MyStopListener());
+    stop.addActionListener(new myStopListener());
     buttonBox.add(stop);
     
+    JButton clear = new JButton("Clear");
+    clear.addActionListener(new myClearListener());
+    buttonBox.add(clear);
+    
     JButton upTempo = new JButton("Tempo Up");
-    upTempo.addActionListener(new MyUpTempoListener());
+    upTempo.addActionListener(new myUpTempoListener());
     buttonBox.add(upTempo);
     
     JButton downTempo = new JButton("Tempo Down");
-    downTempo.addActionListener(new MyDownTempoListener());
+    downTempo.addActionListener(new myDownTempoListener());
     buttonBox.add(downTempo);
     
     JButton saveBeat = new JButton("Save");
-    saveBeat.addActionListener(new MySendListener());
+    saveBeat.addActionListener(new mySendListener());
     buttonBox.add(saveBeat);
     
     JButton loadBeat = new JButton("Load");
-    loadBeat.addActionListener(new MyReadInListener());
+    loadBeat.addActionListener(new myReadInListener());
     buttonBox.add(loadBeat);
     
     JButton initialize = new JButton("Connect to Chat Server");
-    initialize.addActionListener(new mySundListener());
+    initialize.addActionListener(new myConnectListener());
     buttonBox.add(initialize);
     
     buttonBox.add(textField, "North");
-    textField.addActionListener(new mySandListener());
+    
+    textField.addActionListener(new myTextListener());
     textField.setEditable(false);
     
     buttonBox.add(new JScrollPane(messageField), "Center");
@@ -93,9 +127,11 @@ public class CollaborativeBeatBox {
     GridLayout grid = new GridLayout(16,16);
     grid.setVgap(1);
     grid.setHgap(2);
+    
     mainPanel = new JPanel(grid);
     background.add(BorderLayout.CENTER, mainPanel);
     
+    // Creates 16 x 16 square of checkboxes.
     for (int i = 0; i < 256; i++) {
       JCheckBox c = new JCheckBox();
       c.setSelected(false);
@@ -103,6 +139,7 @@ public class CollaborativeBeatBox {
       mainPanel.add(c);
     }
     
+    //
     setUpMidi();
     
     theFrame.setBounds(50,50,300,300);
@@ -121,32 +158,50 @@ public class CollaborativeBeatBox {
     } catch(Exception e) {e.printStackTrace();}
   }
   
+  /** Creates arrays of checkbox state, determining
+    * if each checkbox is selected, determining
+    * which instrument it is for.
+    */
+    
   public void buildTrackAndStart() {
-    int[] trackList = null;
+    int[] eventList = null;
+    
+    //Deletes old track and creates new. 
+    //Does not uncheck checkboxes.
     
     sequence.deleteTrack(track);
     track = sequence.createTrack();
     
+    //For every row of instruments, create an array to store keys.
+    
     for (int i = 0; i < 16; i++) {
-      trackList = new int[16];
+      eventList = new int[16];
       
       int key = instruments[i];
+      
+      //For every checkbox in that row, if it is selected,
+      //add the instrument's key.
       
       for (int j = 0; j < 16; j++ ) {
         
         JCheckBox jc = (JCheckBox) checkboxList.get(j + (16*i));
+       
         if (jc.isSelected()) {
-          trackList[j] = key;
+          eventList[j] = key;
         } else {
-          trackList[j] = 0;
+          eventList[j] = 0;
         }
       }
       
-      makeTracks(trackList);
-      //track.add(makeEvent (176,1,127,0,16));
+      //
+      addEvents(eventList);
+
     }
     
+    //Make empty event at the last beat so 
     track.add(makeEvent(192,9,1,0,15));
+    
+    //Sequencer plays new sequence in a loop, which plays track.
     try {
       
       sequencer.setSequence(sequence);
@@ -156,34 +211,15 @@ public class CollaborativeBeatBox {
     } catch(Exception e) {e.printStackTrace();}
   }
   
-  public class MyStartListener implements ActionListener {
-    public void actionPerformed(ActionEvent a) {
-      buildTrackAndStart();
-    }
-  }
+    /**
+   * Adds key-on and key-off MIDI events to every
+   * instrument for each beat, depending on whether 
+   * the checkbox has been checked and the instrument's
+   * key is at that particular index in the array.
+   * If it's 0, the checkbox is empty and the key is 0.
+   */
   
-  public class MyStopListener implements ActionListener {
-    public void actionPerformed(ActionEvent a) {
-      sequencer.stop();
-    }
-  }
-  
-  public class MyUpTempoListener implements ActionListener {
-    public void actionPerformed(ActionEvent a) {
-      float tempoFactor = sequencer.getTempoFactor();
-      sequencer.setTempoFactor((float) (tempoFactor * 1.03));
-      
-    }
-  }
-  
-  public class MyDownTempoListener implements ActionListener {
-    public void actionPerformed(ActionEvent a) {
-      float tempoFactor = sequencer.getTempoFactor();
-      sequencer.setTempoFactor((float) (tempoFactor * .97));
-    }
-  }
-  
-  public void makeTracks(int[] list) {
+  public void addEvents(int[] list) {
     
     for (int i = 0; i < 16; i++) {
       int key = list[i];
@@ -195,6 +231,15 @@ public class CollaborativeBeatBox {
     }
   }
   
+  /**
+   * Creates MIDI events.
+   *   comd: message type
+   *   chan: channel
+   *   one: note to play
+   *   two: velocity
+   *   tick: beat message is played on.
+   */
+  
   public MidiEvent makeEvent(int comd, int chan, int one, int two, int tick) {
     MidiEvent event = null;
     try {
@@ -205,9 +250,69 @@ public class CollaborativeBeatBox {
     return event;
     
   }
+  
+  /**
+   * Creates new track upon pressing 'Start'.
+   */
 
-  public class MySendListener implements ActionListener {
-    
+  public class myStartListener implements ActionListener {
+    public void actionPerformed(ActionEvent a) {
+      buildTrackAndStart();
+    }
+  }
+  
+  /**
+   * Stops track upon pressing 'Stop'.
+   */
+  
+  public class myStopListener implements ActionListener {
+    public void actionPerformed(ActionEvent a) {
+      sequencer.stop();
+    }
+  }
+  
+  /**
+   * Speeds up Sequencer tempo upon pressing 'Tempo Up'.
+   */
+  
+  public class myUpTempoListener implements ActionListener {
+    public void actionPerformed(ActionEvent a) {
+      float tempoFactor = sequencer.getTempoFactor();
+      sequencer.setTempoFactor((float) (tempoFactor * 1.03));
+      
+    }
+  }
+  
+  /**
+   * Slows down Sequencer tempo upon pressing 'Tempo Up'
+   */
+  
+  public class myDownTempoListener implements ActionListener {
+    public void actionPerformed(ActionEvent a) {
+      float tempoFactor = sequencer.getTempoFactor();
+      sequencer.setTempoFactor((float) (tempoFactor * .97));
+    }
+  }
+  
+  /**
+   * Clears all checkboxes upon pressing 'Clear'
+   */
+  
+  public class myClearListener implements ActionListener {
+    public void actionPerformed(ActionEvent a) {
+      sequencer.stop();
+      for (int i = 0; i < 256; i++) {  
+        checkboxList.get(i).setSelected(false);
+      }
+    }
+  }
+  
+  /**
+   * Saves current checkbox state to file in current
+   * working directory.
+   */
+  
+  public class mySendListener implements ActionListener { 
     public void actionPerformed(ActionEvent a) {
       
       boolean[] checkboxState = new boolean[256];
@@ -230,8 +335,12 @@ public class CollaborativeBeatBox {
     }
   }
   
-  public class MyReadInListener implements ActionListener {
-    
+  /**
+   * Loads checkbox state from file in working directory
+   * named 'checkbox.ser'.
+   */
+  
+  public class myReadInListener implements ActionListener { 
     public void actionPerformed(ActionEvent a) {
       boolean[] checkboxState = null;
       try {
@@ -258,17 +367,28 @@ public class CollaborativeBeatBox {
     }
   }
   
-  class mySandListener implements ActionListener {
+  /**
+   * Sends contents of text area message to PrintWriter
+   * and clears text area upon pressing enter.
+   */
+  
+  class myTextListener implements ActionListener {
     public void actionPerformed(ActionEvent a) {
+      
       out.println(textField.getText());
       textField.setText("");
     }
   }
   
-  class mySundListener implements ActionListener {
+  /**
+   * Attempt to this client to the server upon
+   * pressing 'Connect to Chat Server'.
+   */
+  
+  class myConnectListener implements ActionListener {
     public void actionPerformed(ActionEvent a) {
       try {
-      new chatClient().execute();
+      new ChatClient().execute();
       }
       catch (Exception e) {
         e.printStackTrace();
@@ -291,7 +411,10 @@ public class CollaborativeBeatBox {
             JOptionPane.QUESTION_MESSAGE);
     }
 
-    class chatClient extends SwingWorker<Void, Void> {
+  /**
+   */
+    
+    class ChatClient extends SwingWorker<Void, Void> {
     
       public Void doInBackground() throws IOException {
         textField.setFocusable(true);
